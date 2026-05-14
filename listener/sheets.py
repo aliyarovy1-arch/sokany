@@ -23,11 +23,18 @@ def model_exists(sheet: gspread.Worksheet, model: str) -> bool:
     return model in col_values
 
 
-def insert_row(sheet: gspread.Worksheet, data: dict, msg_id: int, date_str: str) -> None:
+def insert_row(
+    sheet: gspread.Worksheet,
+    data: dict,
+    msg_id: int,
+    date_str: str,
+    photo_url: str = "",
+) -> None:
     post_link = f"https://t.me/Sokany_official/{msg_id}"
+    photo_cell = f'=IMAGE("{photo_url}")' if photo_url else post_link
 
     row = [
-        post_link,                   # A: Фото (ссылка на пост)
+        photo_cell,                  # A: Фото
         data.get("name") or "",      # B: Наименование
         data.get("model") or "",     # C: Модель
         data.get("specs") or "",     # D: Характеристики и описание

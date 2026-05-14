@@ -19,6 +19,9 @@ dist/
 build/
 *.egg
 
+# Data
+data/
+
 # Credentials
 credentials/
 *.session

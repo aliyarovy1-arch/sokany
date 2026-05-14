@@ -8,4 +8,5 @@ dependencies = [
     "gspread",
     "google-auth",
     "python-dotenv",
+    "httpx",
 ]
