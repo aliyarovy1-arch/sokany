@@ -25,6 +25,7 @@ data/
 # Credentials
 credentials/
 *.session
+*.session-journal
 
 # Environment
 .env
