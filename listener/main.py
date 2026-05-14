@@ -9,7 +9,7 @@ from telethon import TelegramClient, events
 from .config import API_ID, API_HASH, CHANNEL
 from .parser import parse_description
 from .photos import get_photo_url
-from .sheets import get_sheet, insert_row
+from .sheets import get_sheet, insert_row, delete_row_by_model
 from . import db
 
 SESSION_PATH = str(Path(__file__).resolve().parent / "session")
@@ -35,15 +35,17 @@ async def process_messages(client: TelegramClient, messages: list) -> None:
         print(f"[skip] Модель не найдена (msg_id={messages[0].id})")
         return
 
+    sheet = get_sheet()
     if db.model_exists(model):
-        return
+        delete_row_by_model(sheet, model)
+        db.delete_model(model)
+        print(f"[replace] Заменяю модель '{model}'")
 
     first = messages[0]
     date_str = first.date.strftime("%Y-%m-%d") if first.date else ""
 
     photo_url = await get_photo_url(client, messages) or ""
 
-    sheet = get_sheet()
     insert_row(sheet, data, first.id, date_str, photo_url)
     db.mark_processed(first.id, model, photo_url)
     print(f"[ok] Добавлено: {data.get('name')} | модель: {model}")
@@ -71,12 +73,17 @@ async def backfill_recent(client: TelegramClient) -> None:
         else:
             singles.append(msg)
 
+    units: list[list] = []
     for group_msgs in groups.values():
         group_msgs.sort(key=lambda m: m.id)
-        await process_messages(client, group_msgs)
+        units.append(group_msgs)
+    for msg in singles:
+        units.append([msg])
 
-    for msg in sorted(singles, key=lambda m: m.id):
-        await process_messages(client, [msg])
+    units.sort(key=lambda unit: unit[0].id)
+
+    for unit in units:
+        await process_messages(client, unit)
 
     print("[backfill] Готово")
 

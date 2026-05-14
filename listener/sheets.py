@@ -18,9 +18,10 @@ def get_sheet() -> gspread.Worksheet:
     return spreadsheet.sheet1
 
 
-def model_exists(sheet: gspread.Worksheet, model: str) -> bool:
-    col_values = sheet.col_values(3)  # колонка C = Модель
-    return model in col_values
+def delete_row_by_model(sheet: gspread.Worksheet, model: str) -> None:
+    cell = sheet.find(model, in_column=3)
+    if cell is not None:
+        sheet.delete_rows(cell.row)
 
 
 def insert_row(

@@ -34,6 +34,11 @@ def model_exists(model: str) -> bool:
     return row is not None
 
 
+def delete_model(model: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM products WHERE model = ?", (model,))
+
+
 def mark_processed(msg_id: int, model: str, photo_url: str = "") -> None:
     with _connect() as conn:
         conn.execute(
