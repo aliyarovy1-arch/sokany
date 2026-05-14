@@ -1,0 +1,32 @@
+# Project-specific
+tg_parser/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Credentials
+credentials/
+*.session
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
