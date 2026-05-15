@@ -5,8 +5,9 @@ from collections import defaultdict
 from pathlib import Path
 
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 
-from .config import API_ID, API_HASH, CHANNEL
+from .config import API_ID, API_HASH, CHANNEL, TELEGRAM_SESSION
 from .parser import parse_description
 from .photos import get_photo_url
 from .sheets import get_sheet, insert_row, delete_row_by_model
@@ -90,7 +91,8 @@ async def backfill_recent(client: TelegramClient) -> None:
 
 async def main() -> None:
     db.init_db()
-    client = TelegramClient(SESSION_PATH, API_ID, API_HASH)
+    session = StringSession(TELEGRAM_SESSION) if TELEGRAM_SESSION else SESSION_PATH
+    client = TelegramClient(session, API_ID, API_HASH)
     await client.start()
     await backfill_recent(client)
     print(f"Слушаю канал {CHANNEL}...")
