@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
+
 import gspread
 from google.oauth2.service_account import Credentials
 
-from .config import SA_PATH, SHEET_NAME
+from .config import SA_PATH, SHEET_NAME, GOOGLE_SA_JSON
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -12,7 +14,11 @@ SCOPES = [
 
 
 def get_sheet() -> gspread.Worksheet:
-    creds = Credentials.from_service_account_file(str(SA_PATH), scopes=SCOPES)
+    if GOOGLE_SA_JSON:
+        info = json.loads(GOOGLE_SA_JSON)
+        creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+    else:
+        creds = Credentials.from_service_account_file(str(SA_PATH), scopes=SCOPES)
     gc = gspread.authorize(creds)
     spreadsheet = gc.open(SHEET_NAME)
     return spreadsheet.sheet1
