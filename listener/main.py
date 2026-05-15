@@ -89,6 +89,20 @@ async def backfill_recent(client: TelegramClient) -> None:
     print("[backfill] Готово")
 
 
+KEEPALIVE_INTERVAL = 3600
+RECONNECT_DELAY = 10
+
+
+async def keepalive(client: TelegramClient) -> None:
+    while True:
+        await asyncio.sleep(KEEPALIVE_INTERVAL)
+        try:
+            await client.get_me()
+            print("[keepalive] Соединение активно")
+        except Exception as e:
+            print(f"[keepalive] Пинг не прошёл: {e}")
+
+
 async def main() -> None:
     db.init_db()
 
@@ -99,9 +113,6 @@ async def main() -> None:
 
     session = StringSession(TELEGRAM_SESSION) if TELEGRAM_SESSION else SESSION_PATH
     client = TelegramClient(session, API_ID, API_HASH)
-    await client.start()
-    await backfill_recent(client)
-    print(f"Слушаю канал {CHANNEL}...")
 
     @client.on(events.NewMessage(chats=CHANNEL))
     async def handler(event):
@@ -118,7 +129,16 @@ async def main() -> None:
         else:
             await process_messages(client, [msg])
 
-    await client.run_until_disconnected()
+    while True:
+        try:
+            await client.start()
+            print(f"Слушаю канал {CHANNEL}...")
+            asyncio.create_task(keepalive(client))
+            await client.run_until_disconnected()
+        except Exception as e:
+            print(f"[error] Отключение: {e}")
+        print(f"[reconnect] Переподключаюсь через {RECONNECT_DELAY}с...")
+        await asyncio.sleep(RECONNECT_DELAY)
 
 
 if __name__ == "__main__":
