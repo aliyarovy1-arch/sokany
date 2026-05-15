@@ -24,6 +24,12 @@ def get_sheet() -> gspread.Worksheet:
     return spreadsheet.sheet1
 
 
+def get_existing_models() -> set[str]:
+    sheet = get_sheet()
+    values = sheet.col_values(3)
+    return {v.strip() for v in values[1:] if v.strip()}
+
+
 def delete_row_by_model(sheet: gspread.Worksheet, model: str) -> None:
     cell = sheet.find(model, in_column=3)
     if cell is not None:

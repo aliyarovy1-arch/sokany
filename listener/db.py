@@ -39,6 +39,14 @@ def delete_model(model: str) -> None:
         conn.execute("DELETE FROM products WHERE model = ?", (model,))
 
 
+def bulk_mark_models(models: set[str]) -> None:
+    with _connect() as conn:
+        conn.executemany(
+            "INSERT OR IGNORE INTO products (msg_id, model, photo_url, created_at) VALUES (0, ?, '', '')",
+            [(m,) for m in models],
+        )
+
+
 def mark_processed(msg_id: int, model: str, photo_url: str = "") -> None:
     with _connect() as conn:
         conn.execute(

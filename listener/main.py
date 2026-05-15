@@ -10,7 +10,7 @@ from telethon.sessions import StringSession
 from .config import API_ID, API_HASH, CHANNEL, TELEGRAM_SESSION
 from .parser import parse_description
 from .photos import get_photo_url
-from .sheets import get_sheet, insert_row, delete_row_by_model
+from .sheets import get_sheet, get_existing_models, insert_row, delete_row_by_model
 from . import db
 
 SESSION_PATH = str(Path(__file__).resolve().parent / "session")
@@ -62,8 +62,8 @@ async def flush_album(client: TelegramClient, grouped_id: int) -> None:
 
 
 async def backfill_recent(client: TelegramClient) -> None:
-    print("[backfill] Проверяю последние 100 сообщений...")
-    messages = await client.get_messages(CHANNEL, limit=100)
+    print("[backfill] Проверяю последние 30 сообщений...")
+    messages = await client.get_messages(CHANNEL, limit=30)
 
     groups: dict[int, list] = defaultdict(list)
     singles: list = []
@@ -91,6 +91,12 @@ async def backfill_recent(client: TelegramClient) -> None:
 
 async def main() -> None:
     db.init_db()
+
+    existing = get_existing_models()
+    if existing:
+        db.bulk_mark_models(existing)
+        print(f"[sync] Загружено {len(existing)} моделей из таблицы")
+
     session = StringSession(TELEGRAM_SESSION) if TELEGRAM_SESSION else SESSION_PATH
     client = TelegramClient(session, API_ID, API_HASH)
     await client.start()
