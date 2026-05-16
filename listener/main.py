@@ -113,7 +113,6 @@ async def main() -> None:
 
     session = StringSession(TELEGRAM_SESSION) if TELEGRAM_SESSION else SESSION_PATH
     client = TelegramClient(session, API_ID, API_HASH)
-    await backfill_recent(client)
 
     @client.on(events.NewMessage(chats=CHANNEL))
     async def handler(event):
@@ -133,6 +132,7 @@ async def main() -> None:
     while True:
         try:
             await client.start()
+            await backfill_recent(client)
             print(f"Слушаю канал {CHANNEL}...")
             asyncio.create_task(keepalive(client))
             await client.run_until_disconnected()
