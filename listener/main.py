@@ -105,12 +105,21 @@ async def main() -> None:
     await client.start()
     print(f"[start] Клиент запущен, поллинг каждые {POLL_INTERVAL}с")
 
+    try:
+        await poll_once(client)
+    except Exception as e:
+        print(f"[error] Ошибка при поллинге: {e}")
+    await client.disconnect()
+
     while True:
+        await asyncio.sleep(POLL_INTERVAL)
         try:
+            await client.connect()
             await poll_once(client)
         except Exception as e:
             print(f"[error] Ошибка при поллинге: {e}")
-        await asyncio.sleep(POLL_INTERVAL)
+        finally:
+            await client.disconnect()
 
 
 if __name__ == "__main__":
