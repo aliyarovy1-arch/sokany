@@ -73,7 +73,7 @@ async def process_group(client: TelegramClient, messages: list, sheet) -> None:
 
 
 async def poll_once(client: TelegramClient) -> None:
-    messages = await client.get_messages(CHANNEL, limit=100)
+    messages = await client.get_messages(CHANNEL, limit=40)
     if not messages:
         print("[poll] Нет сообщений")
         return
