@@ -14,3 +14,4 @@ SHEET_NAME = os.environ["GOOGLE_SHEET_NAME"]
 DB_PATH = Path(os.environ.get("DB_PATH", "data/sokany.db"))
 TELEGRAM_SESSION = os.environ.get("TELEGRAM_SESSION", "")
 IMGBB_API_KEY = os.environ["IMGBB_API_KEY"]
+POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "1800"))

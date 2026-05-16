@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
 from pathlib import Path
 
-from telethon import TelegramClient, events
+from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-from .config import API_ID, API_HASH, CHANNEL, TELEGRAM_SESSION
+from .config import API_ID, API_HASH, CHANNEL, TELEGRAM_SESSION, POLL_INTERVAL
 from .parser import parse_description
 from .photos import get_photo_url
 from .sheets import get_sheet, get_existing_models, insert_row, delete_row_by_model
@@ -15,11 +14,30 @@ from . import db
 
 SESSION_PATH = str(Path(__file__).resolve().parent / "session")
 
-album_buffer: dict[int, list] = defaultdict(list)
-album_timers: dict[int, asyncio.Task] = {}
+
+def group_messages(messages: list) -> list[list]:
+    albums: dict[int, list] = {}
+    singles: list[list] = []
+
+    for msg in messages:
+        if msg.grouped_id:
+            albums.setdefault(msg.grouped_id, []).append(msg)
+        else:
+            singles.append([msg])
+
+    groups = []
+    for group_msgs in albums.values():
+        group_msgs.sort(key=lambda m: m.id)
+        groups.append(group_msgs)
+    groups.extend(singles)
+    groups.sort(key=lambda g: g[0].id)
+    return groups
 
 
-async def process_messages(client: TelegramClient, messages: list) -> None:
+async def process_group(client: TelegramClient, messages: list, sheet) -> None:
+    msg_ids = [m.id for m in messages]
+    grouped_id = messages[0].grouped_id
+
     text = ""
     for m in messages:
         if m.text:
@@ -28,15 +46,16 @@ async def process_messages(client: TelegramClient, messages: list) -> None:
 
     if not text:
         print(f"[skip] Пост без текста (msg_id={messages[0].id})")
+        db.mark_msg_ids_processed(msg_ids, grouped_id, None)
         return
 
     data = parse_description(text)
     model = data.get("model")
     if not model:
         print(f"[skip] Модель не найдена (msg_id={messages[0].id})")
+        db.mark_msg_ids_processed(msg_ids, grouped_id, None)
         return
 
-    sheet = get_sheet()
     if db.model_exists(model):
         delete_row_by_model(sheet, model)
         db.delete_model(model)
@@ -49,62 +68,32 @@ async def process_messages(client: TelegramClient, messages: list) -> None:
 
     insert_row(sheet, data, first.id, date_str, photo_url)
     db.mark_processed(first.id, model, photo_url)
+    db.mark_msg_ids_processed(msg_ids, grouped_id, model)
     print(f"[ok] Добавлено: {data.get('name')} | модель: {model}")
 
 
-async def flush_album(client: TelegramClient, grouped_id: int) -> None:
-    await asyncio.sleep(3)
-    messages = album_buffer.pop(grouped_id, [])
-    album_timers.pop(grouped_id, None)
-    if messages:
-        messages.sort(key=lambda m: m.id)
-        await process_messages(client, messages)
+async def poll_once(client: TelegramClient) -> None:
+    messages = await client.get_messages(CHANNEL, limit=100)
+    if not messages:
+        print("[poll] Нет сообщений")
+        return
 
+    groups = group_messages(messages)
+    sheet = get_sheet()
 
-async def backfill_recent(client: TelegramClient) -> None:
-    print("[backfill] Проверяю последние 10 сообщений...")
-    messages = await client.get_messages(CHANNEL, limit=10)
+    new_count = 0
+    for group in groups:
+        if db.msg_id_processed(group[0].id):
+            continue
+        await process_group(client, group, sheet)
+        new_count += 1
 
-    groups: dict[int, list] = defaultdict(list)
-    singles: list = []
-
-    for msg in messages:
-        if msg.grouped_id:
-            groups[msg.grouped_id].append(msg)
-        else:
-            singles.append(msg)
-
-    units: list[list] = []
-    for group_msgs in groups.values():
-        group_msgs.sort(key=lambda m: m.id)
-        units.append(group_msgs)
-    for msg in singles:
-        units.append([msg])
-
-    units.sort(key=lambda unit: unit[0].id)
-
-    for unit in units:
-        await process_messages(client, unit)
-
-    print("[backfill] Готово")
-
-
-KEEPALIVE_INTERVAL = 3600
-RECONNECT_DELAY = 10
-
-
-async def keepalive(client: TelegramClient) -> None:
-    while True:
-        await asyncio.sleep(KEEPALIVE_INTERVAL)
-        try:
-            await client.get_me()
-            print("[keepalive] Соединение активно")
-        except Exception as e:
-            print(f"[keepalive] Пинг не прошёл: {e}")
+    print(f"[poll] Обработано {new_count} новых постов из {len(groups)}")
 
 
 async def main() -> None:
     db.init_db()
+    db.migrate_existing_msg_ids()
 
     existing = get_existing_models()
     if existing:
@@ -113,33 +102,15 @@ async def main() -> None:
 
     session = StringSession(TELEGRAM_SESSION) if TELEGRAM_SESSION else SESSION_PATH
     client = TelegramClient(session, API_ID, API_HASH)
-
-    @client.on(events.NewMessage(chats=CHANNEL))
-    async def handler(event):
-        msg = event.message
-
-        if msg.grouped_id:
-            album_buffer[msg.grouped_id].append(msg)
-            old = album_timers.pop(msg.grouped_id, None)
-            if old:
-                old.cancel()
-            album_timers[msg.grouped_id] = asyncio.create_task(
-                flush_album(client, msg.grouped_id)
-            )
-        else:
-            await process_messages(client, [msg])
+    await client.start()
+    print(f"[start] Клиент запущен, поллинг каждые {POLL_INTERVAL}с")
 
     while True:
         try:
-            await client.start()
-            await backfill_recent(client)
-            print(f"Слушаю канал {CHANNEL}...")
-            asyncio.create_task(keepalive(client))
-            await client.run_until_disconnected()
+            await poll_once(client)
         except Exception as e:
-            print(f"[error] Отключение: {e}")
-        print(f"[reconnect] Переподключаюсь через {RECONNECT_DELAY}с...")
-        await asyncio.sleep(RECONNECT_DELAY)
+            print(f"[error] Ошибка при поллинге: {e}")
+        await asyncio.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
