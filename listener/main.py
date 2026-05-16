@@ -62,7 +62,7 @@ async def flush_album(client: TelegramClient, grouped_id: int) -> None:
 
 
 async def backfill_recent(client: TelegramClient) -> None:
-    print("[backfill] Проверяю последние 30 сообщений...")
+    print("[backfill] Проверяю последние 10 сообщений...")
     messages = await client.get_messages(CHANNEL, limit=10)
 
     groups: dict[int, list] = defaultdict(list)
